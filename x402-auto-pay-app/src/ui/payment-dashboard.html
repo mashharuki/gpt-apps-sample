@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>x402 Auto Pay Dashboard</title>
+        <style>
+            :root {
+                color-scheme: light dark;
+                font-family: "Inter", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+            }
+            body {
+                margin: 0;
+                padding: 24px;
+                background: #0f172a;
+                color: #e2e8f0;
+            }
+            .container {
+                display: grid;
+                gap: 16px;
+                max-width: 880px;
+                margin: 0 auto;
+            }
+            .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .card {
+                background: #111827;
+                border: 1px solid #1f2937;
+                border-radius: 12px;
+                padding: 16px;
+                box-shadow: 0 8px 24px rgba(15, 23, 42, 0.35);
+            }
+            .grid {
+                display: grid;
+                gap: 12px;
+            }
+            label {
+                font-size: 12px;
+                color: #94a3b8;
+                margin-bottom: 4px;
+                display: block;
+            }
+            input {
+                width: 100%;
+                padding: 10px 12px;
+                border-radius: 8px;
+                border: 1px solid #334155;
+                background: #0f172a;
+                color: #e2e8f0;
+                font-size: 14px;
+            }
+            button {
+                padding: 10px 16px;
+                background: #38bdf8;
+                color: #0f172a;
+                border: none;
+                border-radius: 8px;
+                font-weight: 600;
+                cursor: pointer;
+            }
+            button:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+            .status {
+                margin-top: 8px;
+                font-size: 12px;
+                color: #fbbf24;
+            }
+            .payments {
+                display: grid;
+                gap: 10px;
+            }
+            .payment-item {
+                border: 1px solid #1f2937;
+                border-radius: 10px;
+                padding: 12px;
+                display: grid;
+                gap: 4px;
+                background: #0b1120;
+            }
+            .payment-meta {
+                font-size: 12px;
+                color: #94a3b8;
+            }
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                padding: 2px 8px;
+                border-radius: 999px;
+                background: #1f2937;
+                color: #e2e8f0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div>
+                    <h1>x402 Auto Pay</h1>
+                    <div class="payment-meta" id="session">session: -</div>
+                </div>
+                <button id="refresh">更新</button>
+            </div>
+            <div class="card grid">
+                <div>
+                    <label>金額 (通貨単位)</label>
+                    <input id="amount" type="number" min="0.01" step="0.01" value="12.50" />
+                </div>
+                <div>
+                    <label>通貨</label>
+                    <input id="currency" type="text" maxlength="3" value="USD" />
+                </div>
+                <div>
+                    <label>説明</label>
+                    <input id="description" type="text" value="API usage fee" />
+                </div>
+                <div>
+                    <label>顧客ID</label>
+                    <input id="customerId" type="text" placeholder="optional" />
+                </div>
+                <button id="autoPay">自動支払いを実行</button>
+                <div class="status" id="status"></div>
+            </div>
+            <div class="card">
+                <h2>支払い履歴</h2>
+                <div class="payments" id="payments"></div>
+            </div>
+        </div>
+        <script type="module">
+            import { App } from "https://esm.sh/@modelcontextprotocol/ext-apps@1.0.1";
+
+            const app = new App({ name: "x402-payment-dashboard", version: "1.0.0" });
+            const paymentsElement = document.getElementById("payments");
+            const statusElement = document.getElementById("status");
+            const sessionElement = document.getElementById("session");
+            const amountInput = document.getElementById("amount");
+            const currencyInput = document.getElementById("currency");
+            const descriptionInput = document.getElementById("description");
+            const customerIdInput = document.getElementById("customerId");
+            const autoPayButton = document.getElementById("autoPay");
+            const refreshButton = document.getElementById("refresh");
+
+            const setStatus = (text, tone) => {
+                statusElement.textContent = text;
+                statusElement.style.color = tone === "error" ? "#f97316" : "#fbbf24";
+            };
+
+            const formatAmount = (amountCents) => {
+                const amountNumber = Number(amountCents) / 100;
+                return amountNumber.toFixed(2);
+            };
+
+            const renderPayments = (payments) => {
+                paymentsElement.innerHTML = "";
+                if (!payments.length) {
+                    paymentsElement.innerHTML = "<div class='payment-meta'>履歴がありません</div>";
+                    return;
+                }
+                payments.forEach((payment) => {
+                    const container = document.createElement("div");
+                    container.className = "payment-item";
+                    container.innerHTML = `
+                        <div><strong>${payment.description}</strong></div>
+                        <div>${formatAmount(payment.amountCents)} ${payment.currency}</div>
+                        <div class="payment-meta">${payment.createdAtIso}</div>
+                        <div class="badge">${payment.status}</div>
+                    `;
+                    paymentsElement.appendChild(container);
+                });
+            };
+
+            const getAmountCents = () => {
+                const amountNumber = Number(amountInput.value || "0");
+                return Math.round(amountNumber * 100);
+            };
+
+            const refreshPayments = async () => {
+                const result = await app.callServerTool({ name: "x402_list_payments", arguments: {} });
+                const payments = Array.isArray(result?.structuredContent?.payments)
+                    ? result.structuredContent.payments
+                    : [];
+                renderPayments(payments);
+            };
+
+            const handleAutoPay = async () => {
+                setStatus("支払い処理中...", "info");
+                autoPayButton.disabled = true;
+                try {
+                    const result = await app.callServerTool({
+                        name: "x402_auto_pay",
+                        arguments: {
+                            amountCents: getAmountCents(),
+                            currency: currencyInput.value,
+                            description: descriptionInput.value,
+                            customerId: customerIdInput.value || undefined,
+                        },
+                    });
+                    const payment = result?.structuredContent?.payment;
+                    if (payment) {
+                        setStatus(`支払い完了: ${payment.status}`, "info");
+                        await app.updateModelContext({
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `x402 auto pay completed: ${payment.id} (${payment.status})`,
+                                },
+                            ],
+                        });
+                    } else {
+                        setStatus("支払い結果の取得に失敗しました", "error");
+                    }
+                    await refreshPayments();
+                } catch (error) {
+                    setStatus("支払いに失敗しました", "error");
+                } finally {
+                    autoPayButton.disabled = false;
+                }
+            };
+
+            refreshButton.addEventListener("click", () => {
+                void refreshPayments();
+            });
+
+            autoPayButton.addEventListener("click", () => {
+                void handleAutoPay();
+            });
+
+            app.ontoolinput = (params) => {
+                const sessionId = params?.input?.sessionId;
+                if (sessionId) {
+                    sessionElement.textContent = `session: ${sessionId}`;
+                }
+            };
+
+            await app.connect();
+            await refreshPayments();
+        </script>
+    </body>
+</html>
