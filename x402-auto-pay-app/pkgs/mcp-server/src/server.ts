@@ -9,8 +9,6 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-type PaymentStatus = "pending" | "paid" | "failed" | "mocked";
-
 type PaymentRecord = {
     id: string;
     amountCents: number;
@@ -22,21 +20,7 @@ type PaymentRecord = {
     externalId?: string;
 };
 
-type AutoPayInput = {
-    amountCents: number;
-    currency: string;
-    description: string;
-    customerId?: string;
-};
-
-type X402AutoPayResponse = {
-    status: PaymentStatus;
-    externalId?: string;
-    provider: string;
-};
-
 const DEFAULT_PORT_NUMBER: number = 8787;
-const DEFAULT_TIMEOUT_MS: number = 15000;
 const DASHBOARD_RESOURCE_URI: string = "ui://x402/payment-dashboard";
 
 let serverInstance: Bun.Server | null = null;
@@ -56,13 +40,6 @@ const parsePortNumber = (value: string | undefined): number => {
 
 const normalizeCurrencyCode = (value: string): string => value.trim().toUpperCase();
 
-const normalizePaymentStatus = (value: string | undefined): PaymentStatus => {
-    if (value === "pending" || value === "paid" || value === "failed" || value === "mocked") {
-        return value;
-    }
-    return "paid";
-};
-
 const createPaymentRecord = (input: AutoPayInput, response: X402AutoPayResponse): PaymentRecord => ({
     id: randomUUID(),
     amountCents: input.amountCents,
@@ -73,60 +50,6 @@ const createPaymentRecord = (input: AutoPayInput, response: X402AutoPayResponse)
     provider: response.provider,
     externalId: response.externalId,
 });
-
-const fetchWithTimeout = async (input: RequestInfo | URL, timeoutMs: number, init?: RequestInit): Promise<Response> => {
-    const controller: AbortController = new AbortController();
-    const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-        const response: Response = await fetch(input, { ...init, signal: controller.signal });
-        return response;
-    } finally {
-        clearTimeout(timeoutId);
-    }
-};
-
-const callX402AutoPay = async (input: AutoPayInput): Promise<X402AutoPayResponse> => {
-    const apiBaseUrl: string | undefined = process.env.X402_API_BASE_URL;
-    const apiKey: string | undefined = process.env.X402_API_KEY;
-    const autoPayEndpoint: string = process.env.X402_AUTO_PAY_ENDPOINT ?? "/v1/payments/auto";
-    const timeoutMs: number = Number.parseInt(process.env.X402_TIMEOUT_MS ?? "", 10) || DEFAULT_TIMEOUT_MS;
-    const providerName: string = process.env.X402_PROVIDER_NAME ?? "x402";
-    const idempotencyKey: string = randomUUID();
-
-    if (!apiBaseUrl || !apiKey) {
-        return { status: "mocked", provider: providerName };
-    }
-
-    const requestUrl: string = `${apiBaseUrl.replace(/\/$/, "")}${autoPayEndpoint}`;
-    const response: Response = await fetchWithTimeout(requestUrl, timeoutMs, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-            "X-Idempotency-Key": idempotencyKey,
-        },
-        body: JSON.stringify({
-            amount_cents: input.amountCents,
-            currency: normalizeCurrencyCode(input.currency),
-            description: input.description,
-            customer_id: input.customerId,
-        }),
-    });
-
-    if (!response.ok) {
-        throw new Error("X402_AUTO_PAY_FAILED");
-    }
-
-    const data: Record<string, unknown> = (await response.json()) as Record<string, unknown>;
-    const rawStatus: string | undefined = typeof data.status === "string" ? data.status : undefined;
-    const externalId: string | undefined = typeof data.id === "string" ? data.id : undefined;
-
-    return {
-        status: normalizePaymentStatus(rawStatus),
-        externalId,
-        provider: providerName,
-    };
-};
 
 const createAppServer = async (): Promise<{ app: Hono; server: McpServer }> => {
     const app: Hono = new Hono();

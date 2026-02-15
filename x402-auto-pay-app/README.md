@@ -1,49 +1,51 @@
 # x402に対応した自動支払い GPT App
 
+## 構成
+
+- mcp-server: MCPサーバーとUI
+- x402-server: x402 API呼び出しロジック
+
 ## 動かし方
 
 ### セットアップ
-
-まず依存関係をインストールします
 
 ```bash
 bun install
 ```
 
-MCPサーバーを起動させます。
+### MCPサーバー起動
 
 ```bash
 bun run dev
 ```
 
-次に[ngrok]( https://dashboard.ngrok.com/signup) でサインアップを行います。
+起動ログに表示されたURLのポートが実際の待ち受けポートです。
 
-サインアップを実施したら[AuthToken](https://dashboard.ngrok.com/get-started/your-authtoken)が発行されるのでそれを使って認証を行います！
-
-ここまでくれば準備OKです！
-
-### 起動
-
-以下でMCP インスペクターを起動させます。
-
-```bash
-bunx @modelcontextprotocol/inspector@latest --server-url http://localhost:8787/mcp --transport http
+```
+x402 auto-pay app listening on http://localhost:8787
 ```
 
-MCPの動作確認ができたらngrokのURLをChat GPTの開発者画面から設定します。
+### MCPインスペクター
 
 ```bash
-ngrok http 8787
+bunx @modelcontextprotocol/inspector@latest --server-url http://localhost:<port>/mcp --transport http
 ```
 
-そして以下の値を設定します。
+### ChatGPT開発者画面
+
+まず[ngrok]( https://dashboard.ngrok.com/signup) でサインアップします。
+
+```bash
+ngrok http <port>
+```
+
+ChatGPTの開発者画面で以下を設定します。
 
 - アプリの名前
 - アプリの説明
 - MCPまでのURL
-- 認証の有無(検証目的では無しでいいと思います)
+- 認証の有無(検証目的では無しでOK)
 
-そうするとGPTがアプリを認識してくれます！
+### 環境変数
 
-### ChatGPT Appで起動したら
-
+mcp-server/.env.example をコピーして .env を作成します。
