@@ -324,6 +324,8 @@ const startServer = async (): Promise<void> => {
         serverInstance = Bun.serve({ fetch: app.fetch, port: 0 });
     }
     console.log(`x402 auto-pay app listening on http://localhost:${serverInstance.port}`);
+    process.stdin.resume();
+    await new Promise<void>(() => undefined);
 };
 
 await startServer();
