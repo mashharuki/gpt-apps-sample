@@ -23,6 +23,12 @@ pkgs/x402-server/.env.example をコピーして .env を作成します。
 bun run x402 dev
 ```
 
+以下のcurlコマンドでチェックできます。
+
+```bash
+curl -XGET "http://localhost:4021/health"
+```
+
 ### MCPサーバー起動
 
 ```bash
