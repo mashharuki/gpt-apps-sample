@@ -23,16 +23,23 @@ pkgs/x402-server/.env.example をコピーして .env を作成します。
 bun run x402 dev
 ```
 
+または以下でも起動できます。
+
+```bash
+bun run --cwd pkgs/x402-server dev
+```
+
 以下のcurlコマンドでチェックできます。
 
 ```bash
 curl -XGET "http://localhost:4021/health"
+curl -XGET "http://localhost:4021/weather"
 ```
 
 ### MCPサーバー起動
 
 ```bash
-bun run dev
+bun run mcp dev
 ```
 
 起動ログに表示されたURLのポートが実際の待ち受けポートです。

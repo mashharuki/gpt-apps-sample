@@ -6,46 +6,50 @@ import { config } from "dotenv";
 import { Hono } from "hono";
 config();
 
-// 環境変数から取得する
-const evmAddress = process.env.EVM_ADDRESS as `0x${string}`;
-if (!evmAddress) {
-  console.error("Missing required environment variables");
-  process.exit(1);
-}
-
-// facilitatorUrl を環境変数から取得する
+const evmAddress = process.env.EVM_ADDRESS as `0x${string}` | undefined;
 const facilitatorUrl = process.env.FACILITATOR_URL;
-if (!facilitatorUrl) {
-  console.error("❌ FACILITATOR_URL environment variable is required");
-  process.exit(1);
-}
-const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
+const missingConfig = {
+  evmAddress: !evmAddress,
+  facilitatorUrl: !facilitatorUrl,
+};
 
 const app = new Hono();
 
-// ミドルウェアを適用
-app.use(
-  paymentMiddleware(
-    {
-      "GET /weather": {
-        accepts: [
-          {
-            scheme: "exact",
-            price: "$0.001",
-            network: "eip155:84532",
-            payTo: evmAddress,
-          },
-        ],
-        description: "Weather data",
-        mimeType: "application/json",
+if (!missingConfig.evmAddress && !missingConfig.facilitatorUrl) {
+  const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
+  const payTo = evmAddress as `0x${string}`;
+  app.use(
+    paymentMiddleware(
+      {
+        "GET /weather": {
+          accepts: [
+            {
+              scheme: "exact",
+              price: "$0.001",
+              network: "eip155:84532",
+              payTo,
+            },
+          ],
+          description: "Weather data",
+          mimeType: "application/json",
+        },
       },
-    },
-    new x402ResourceServer(facilitatorClient)
-      .register("eip155:84532", new ExactEvmScheme())
-  ),
-);
+      new x402ResourceServer(facilitatorClient).register("eip155:84532", new ExactEvmScheme()),
+    ),
+  );
+}
 
 app.get("/weather", c => {
+  if (missingConfig.evmAddress || missingConfig.facilitatorUrl) {
+    return c.json(
+      {
+        status: "error",
+        message: "Missing required environment variables",
+        missing: missingConfig,
+      },
+      503,
+    );
+  }
   return c.json({
     report: {
       weather: "sunny",
@@ -57,6 +61,7 @@ app.get("/weather", c => {
 app.get("/health", c => {
   return c.json({
     status: "ok",
+    missing: missingConfig,
   });
 });
 

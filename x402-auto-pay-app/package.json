@@ -7,8 +7,8 @@
     "format": "biome format .",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "mcp": "bun --filter mcp-server",
-    "x402": "bun --filter x402-server"
+    "mcp": "bun run --cwd pkgs/mcp-server",
+    "x402": "bun run --cwd pkgs/x402-server"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.15"
