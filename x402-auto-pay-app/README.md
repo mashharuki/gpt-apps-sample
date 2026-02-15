@@ -3,7 +3,7 @@
 ## 構成
 
 - mcp-server: MCPサーバーとUI
-- x402-server: x402 API呼び出しロジック
+- x402-server: x402 API呼び出しロジック（クライアント）
 
 ## 動かし方
 
@@ -48,4 +48,12 @@ ChatGPTの開発者画面で以下を設定します。
 
 ### 環境変数
 
-mcp-server/.env.example をコピーして .env を作成します。
+pkgs/mcp-server/.env.example をコピーして .env を作成します。
+
+## コード品質
+
+```bash
+bun run lint
+bun run format
+bun run check
+```

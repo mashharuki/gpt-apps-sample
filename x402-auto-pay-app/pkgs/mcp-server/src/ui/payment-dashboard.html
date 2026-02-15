@@ -276,7 +276,7 @@
                         setStatus("支払い結果の取得に失敗しました", "error");
                     }
                     await refreshPayments();
-                } catch (error) {
+                } catch (_error) {
                     setStatus("支払いに失敗しました", "error");
                 } finally {
                     autoPayButton.disabled = false;

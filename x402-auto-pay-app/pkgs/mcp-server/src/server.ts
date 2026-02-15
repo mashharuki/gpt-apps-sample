@@ -1,12 +1,13 @@
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { type Context, Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { createX402ClientFromEnv, type AutoPayInput, type PaymentStatus, type X402AutoPayResponse } from "x402-server";
 import { z } from "zod";
 
 type PaymentRecord = {
@@ -54,6 +55,7 @@ const createPaymentRecord = (input: AutoPayInput, response: X402AutoPayResponse)
 const createAppServer = async (): Promise<{ app: Hono; server: McpServer }> => {
     const app: Hono = new Hono();
     const server: McpServer = new McpServer({ name: "x402-auto-pay-app", version: "1.0.0" });
+    const x402Client = createX402ClientFromEnv();
 
     const __filename: string = fileURLToPath(import.meta.url);
     const __dirname: string = dirname(__filename);
@@ -135,7 +137,7 @@ const createAppServer = async (): Promise<{ app: Hono; server: McpServer }> => {
             },
         },
         async (input: AutoPayInput) => {
-            const response: X402AutoPayResponse = await callX402AutoPay(input);
+            const response: X402AutoPayResponse = await x402Client.autoPay(input);
             const payment: PaymentRecord = createPaymentRecord(input, response);
             paymentStoreById.set(payment.id, payment);
             return {

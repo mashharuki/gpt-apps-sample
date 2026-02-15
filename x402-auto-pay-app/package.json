@@ -3,7 +3,15 @@
   "private": true,
   "workspaces": ["pkgs/*"],
   "scripts": {
-    "mcp": "bun run --filter mcp-server",
-    "x402": "bun run --filter x402-server"
+    "dev": "bun --cwd pkgs/mcp-server run dev",
+    "start": "bun --cwd pkgs/mcp-server run start",
+    "lint": "biome lint .",
+    "format": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "mcp": "bun --cwd pkgs/mcp-server run dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.15"
   }
 }
