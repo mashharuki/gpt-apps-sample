@@ -13,6 +13,16 @@
 bun install
 ```
 
+### x402サーバー用の環境変数を設定する
+
+pkgs/x402-server/.env.example をコピーして .env を作成します。
+
+### x402サーバー起動
+
+```bash
+bun run x402 dev
+```
+
 ### MCPサーバー起動
 
 ```bash
