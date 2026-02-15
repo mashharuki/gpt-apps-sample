@@ -7,26 +7,20 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { createX402ClientFromEnv, type AutoPayInput, type PaymentStatus, type X402AutoPayResponse } from "x402-server";
 import { z } from "zod";
 
-type PaymentRecord = {
-    id: string;
-    amountCents: number;
-    currency: string;
-    description: string;
-    status: PaymentStatus;
-    createdAtIso: string;
-    provider: string;
-    externalId?: string;
+type X402ServerResponse = {
+    ok: boolean;
+    statusCode: number;
+    body: unknown;
 };
 
 const DEFAULT_PORT_NUMBER: number = 8787;
 const DASHBOARD_RESOURCE_URI: string = "ui://x402/payment-dashboard";
+const DEFAULT_X402_SERVER_BASE_URL: string = "http://localhost:4021";
+const DEFAULT_X402_SERVER_TIMEOUT_MS: number = 8000;
 
 let serverInstance: Bun.Server | null = null;
-
-const paymentStoreById: Map<string, PaymentRecord> = new Map();
 
 const parsePortNumber = (value: string | undefined): number => {
     if (!value) {
@@ -39,23 +33,42 @@ const parsePortNumber = (value: string | undefined): number => {
     return parsedPortNumber;
 };
 
-const normalizeCurrencyCode = (value: string): string => value.trim().toUpperCase();
+const fetchWithTimeout = async (input: RequestInfo | URL, timeoutMs: number, init?: RequestInit): Promise<Response> => {
+    const controller: AbortController = new AbortController();
+    const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
 
-const createPaymentRecord = (input: AutoPayInput, response: X402AutoPayResponse): PaymentRecord => ({
-    id: randomUUID(),
-    amountCents: input.amountCents,
-    currency: normalizeCurrencyCode(input.currency),
-    description: input.description,
-    status: response.status,
-    createdAtIso: new Date().toISOString(),
-    provider: response.provider,
-    externalId: response.externalId,
-});
+const createX402ServerClient = () => {
+    const baseUrl: string = process.env.X402_SERVER_BASE_URL ?? DEFAULT_X402_SERVER_BASE_URL;
+    const timeoutMs: number =
+        Number.parseInt(process.env.X402_SERVER_TIMEOUT_MS ?? "", 10) || DEFAULT_X402_SERVER_TIMEOUT_MS;
+
+    const request = async (path: string): Promise<X402ServerResponse> => {
+        const url: string = `${baseUrl.replace(/\/$/, "")}${path}`;
+        try {
+            const response: Response = await fetchWithTimeout(url, timeoutMs);
+            const body: unknown = await response.json().catch(() => null);
+            return { ok: response.ok, statusCode: response.status, body };
+        } catch (error) {
+            return { ok: false, statusCode: 0, body: { error: "X402_SERVER_UNREACHABLE", detail: String(error) } };
+        }
+    };
+
+    return {
+        getHealth: () => request("/health"),
+        getWeather: () => request("/weather"),
+    };
+};
 
 const createAppServer = async (): Promise<{ app: Hono; server: McpServer }> => {
     const app: Hono = new Hono();
     const server: McpServer = new McpServer({ name: "x402-auto-pay-app", version: "1.0.0" });
-    const x402Client = createX402ClientFromEnv();
+    const x402ServerClient = createX402ServerClient();
 
     const __filename: string = fileURLToPath(import.meta.url);
     const __dirname: string = dirname(__filename);
@@ -83,7 +96,7 @@ const createAppServer = async (): Promise<{ app: Hono; server: McpServer }> => {
         "open_x402_dashboard",
         {
             title: "Open x402 Payment Dashboard",
-            description: "x402の自動支払いを行うダッシュボードを開く",
+            description: "x402サーバーのステータスとWeatherを確認するダッシュボードを開く",
             inputSchema: {
                 sessionId: z.string().optional(),
             },
@@ -104,7 +117,7 @@ const createAppServer = async (): Promise<{ app: Hono; server: McpServer }> => {
                 content: [
                     {
                         type: "text",
-                        text: "x402 payment dashboard opened",
+                        text: "x402 dashboard opened",
                     },
                 ],
                 structuredContent: payload,
@@ -113,115 +126,53 @@ const createAppServer = async (): Promise<{ app: Hono; server: McpServer }> => {
     );
 
     server.registerTool(
-        "x402_auto_pay",
+        "x402_get_health",
         {
-            title: "x402 Auto Pay",
-            description: "x402で自動支払いを実行する",
-            inputSchema: {
-                amountCents: z.number().int().positive(),
-                currency: z.string().min(3).max(3),
-                description: z.string().min(1),
-                customerId: z.string().optional(),
-            },
-            outputSchema: {
-                payment: z.object({
-                    id: z.string(),
-                    amountCents: z.number().int(),
-                    currency: z.string(),
-                    description: z.string(),
-                    status: z.string(),
-                    createdAtIso: z.string(),
-                    provider: z.string(),
-                    externalId: z.string().optional(),
-                }),
-            },
-        },
-        async (input: AutoPayInput) => {
-            const response: X402AutoPayResponse = await x402Client.autoPay(input);
-            const payment: PaymentRecord = createPaymentRecord(input, response);
-            paymentStoreById.set(payment.id, payment);
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: JSON.stringify(payment),
-                    },
-                ],
-                structuredContent: { payment },
-            };
-        },
-    );
-
-    server.registerTool(
-        "x402_list_payments",
-        {
-            title: "x402 List Payments",
-            description: "支払い履歴を取得する",
+            title: "x402 Get Health",
+            description: "x402サーバーのヘルスチェックを取得する",
             inputSchema: {},
             outputSchema: {
-                payments: z.array(
-                    z.object({
-                        id: z.string(),
-                        amountCents: z.number().int(),
-                        currency: z.string(),
-                        description: z.string(),
-                        status: z.string(),
-                        createdAtIso: z.string(),
-                        provider: z.string(),
-                        externalId: z.string().optional(),
-                    }),
-                ),
+                ok: z.boolean(),
+                statusCode: z.number(),
+                body: z.unknown(),
             },
         },
         async () => {
-            const payments: PaymentRecord[] = Array.from(paymentStoreById.values()).sort((left, right) =>
-                right.createdAtIso.localeCompare(left.createdAtIso),
-            );
+            const response: X402ServerResponse = await x402ServerClient.getHealth();
             return {
                 content: [
                     {
                         type: "text",
-                        text: JSON.stringify({ payments }),
+                        text: JSON.stringify(response),
                     },
                 ],
-                structuredContent: { payments },
+                structuredContent: response,
             };
         },
     );
 
     server.registerTool(
-        "x402_get_payment",
+        "x402_get_weather",
         {
-            title: "x402 Get Payment",
-            description: "支払いの詳細を取得する",
-            inputSchema: {
-                paymentId: z.string(),
-            },
+            title: "x402 Get Weather",
+            description: "x402サーバーのWeatherを取得する",
+            inputSchema: {},
             outputSchema: {
-                payment: z
-                    .object({
-                        id: z.string(),
-                        amountCents: z.number().int(),
-                        currency: z.string(),
-                        description: z.string(),
-                        status: z.string(),
-                        createdAtIso: z.string(),
-                        provider: z.string(),
-                        externalId: z.string().optional(),
-                    })
-                    .nullable(),
+                ok: z.boolean(),
+                statusCode: z.number(),
+                body: z.unknown(),
             },
         },
-        async ({ paymentId }: { paymentId: string }) => {
-            const payment: PaymentRecord | undefined = paymentStoreById.get(paymentId);
+        async () => {
+            const response: X402ServerResponse = await x402ServerClient.getWeather();
             return {
                 content: [
                     {
                         type: "text",
-                        text: JSON.stringify({ payment: payment ?? null }),
+                        text: JSON.stringify(response),
                     },
                 ],
-                structuredContent: { payment: payment ?? null },
+                structuredContent: response,
             };
         },
     );

@@ -3,7 +3,7 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>x402 Auto Pay Dashboard</title>
+        <title>x402 Server Dashboard</title>
         <style>
             :root {
                 color-scheme: light dark;
@@ -18,7 +18,7 @@
             .container {
                 display: grid;
                 gap: 16px;
-                max-width: 880px;
+                max-width: 840px;
                 margin: 0 auto;
             }
             .header {
@@ -33,41 +33,31 @@
                 padding: 16px;
                 box-shadow: 0 8px 24px rgba(15, 23, 42, 0.35);
             }
-            .grid {
-                display: grid;
+            .row {
+                display: flex;
                 gap: 12px;
+                align-items: center;
+                flex-wrap: wrap;
             }
-            label {
+            .status {
                 font-size: 12px;
                 color: #94a3b8;
-                margin-bottom: 4px;
-                display: block;
             }
-            input {
-                width: 100%;
-                padding: 10px 12px;
+            .content {
+                margin-top: 12px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+                font-size: 12px;
+                white-space: pre-wrap;
+                background: #0b1220;
                 border-radius: 8px;
-                border: 1px solid #334155;
-                background: #0f172a;
-                color: #e2e8f0;
-                font-size: 14px;
-            }
-            textarea {
-                width: 100%;
                 padding: 12px;
-                border-radius: 8px;
-                border: 1px solid #334155;
-                background: #0f172a;
-                color: #e2e8f0;
-                font-size: 14px;
-                min-height: 120px;
-                resize: vertical;
+                border: 1px solid #1e293b;
             }
             button {
-                padding: 10px 16px;
+                border: none;
                 background: #38bdf8;
                 color: #0f172a;
-                border: none;
+                padding: 8px 12px;
                 border-radius: 8px;
                 font-weight: 600;
                 cursor: pointer;
@@ -77,238 +67,73 @@
                 color: #e2e8f0;
                 border: 1px solid #334155;
             }
-            button:disabled {
-                opacity: 0.6;
-                cursor: not-allowed;
-            }
-            .hint {
-                font-size: 12px;
-                color: #94a3b8;
-                line-height: 1.6;
-            }
-            .row {
-                display: grid;
-                gap: 12px;
-            }
-            .actions {
-                display: flex;
-                gap: 12px;
-                flex-wrap: wrap;
-            }
-            .status {
-                margin-top: 8px;
-                font-size: 12px;
-                color: #fbbf24;
-            }
-            .payments {
-                display: grid;
-                gap: 10px;
-            }
-            .payment-item {
-                border: 1px solid #1f2937;
-                border-radius: 10px;
-                padding: 12px;
-                display: grid;
-                gap: 4px;
-                background: #0b1120;
-            }
-            .payment-meta {
-                font-size: 12px;
-                color: #94a3b8;
-            }
-            .badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                font-size: 11px;
-                padding: 2px 8px;
-                border-radius: 999px;
-                background: #1f2937;
-                color: #e2e8f0;
-            }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
                 <div>
-                    <h1>x402 Auto Pay</h1>
-                    <div class="payment-meta" id="session">session: -</div>
-                </div>
-                <button id="refresh">更新</button>
-            </div>
-            <div class="card grid">
-                <div class="hint">
-                    この画面はAIとの対話が前提です。支払いの実行はAIに依頼し、会話の文脈に沿って進めます。
-                    まずは内容を入力して依頼文を生成してください。
+                    <h1>x402 Server Dashboard</h1>
+                    <div class="status" id="session">session: -</div>
                 </div>
                 <div class="row">
-                    <div>
-                        <label>金額 (通貨単位)</label>
-                        <input id="amount" type="number" min="0.01" step="0.01" value="12.50" />
-                    </div>
-                    <div>
-                        <label>通貨</label>
-                        <input id="currency" type="text" maxlength="3" value="USD" />
-                    </div>
-                    <div>
-                        <label>説明</label>
-                        <input id="description" type="text" value="API usage fee" />
-                    </div>
-                    <div>
-                        <label>顧客ID</label>
-                        <input id="customerId" type="text" placeholder="optional" />
-                    </div>
+                    <button id="refreshAll" class="secondary">まとめて更新</button>
                 </div>
-                <div>
-                    <label>AIに送る依頼文</label>
-                    <textarea id="requestText"></textarea>
-                    <div class="hint">必要なら文章を編集してから送信できます。</div>
-                </div>
-                <div class="actions">
-                    <button id="sendToChat">AIに依頼文を送信</button>
-                    <button id="autoPay" class="secondary">この画面で即時実行</button>
-                </div>
-                <div class="status" id="status"></div>
             </div>
+
             <div class="card">
-                <h2>支払い履歴</h2>
-                <div class="payments" id="payments"></div>
+                <div class="row">
+                    <h2>Health</h2>
+                    <button id="refreshHealth">更新</button>
+                </div>
+                <div class="content" id="healthContent">loading...</div>
+            </div>
+
+            <div class="card">
+                <div class="row">
+                    <h2>Weather</h2>
+                    <button id="refreshWeather">更新</button>
+                </div>
+                <div class="content" id="weatherContent">loading...</div>
             </div>
         </div>
         <script type="module">
             import { App } from "https://esm.sh/@modelcontextprotocol/ext-apps@1.0.1";
 
-            const app = new App({ name: "x402-payment-dashboard", version: "1.0.0" });
-            const paymentsElement = document.getElementById("payments");
-            const statusElement = document.getElementById("status");
+            const app = new App({ name: "x402-server-dashboard", version: "1.0.0" });
             const sessionElement = document.getElementById("session");
-            const amountInput = document.getElementById("amount");
-            const currencyInput = document.getElementById("currency");
-            const descriptionInput = document.getElementById("description");
-            const customerIdInput = document.getElementById("customerId");
-            const autoPayButton = document.getElementById("autoPay");
-            const refreshButton = document.getElementById("refresh");
-            const requestText = document.getElementById("requestText");
-            const sendToChatButton = document.getElementById("sendToChat");
+            const healthContent = document.getElementById("healthContent");
+            const weatherContent = document.getElementById("weatherContent");
+            const refreshHealthButton = document.getElementById("refreshHealth");
+            const refreshWeatherButton = document.getElementById("refreshWeather");
+            const refreshAllButton = document.getElementById("refreshAll");
 
-            const setStatus = (text, tone) => {
-                statusElement.textContent = text;
-                statusElement.style.color = tone === "error" ? "#f97316" : "#fbbf24";
-            };
-
-            const formatAmount = (amountCents) => {
-                const amountNumber = Number(amountCents) / 100;
-                return amountNumber.toFixed(2);
-            };
-
-            const renderPayments = (payments) => {
-                paymentsElement.innerHTML = "";
-                if (!payments.length) {
-                    paymentsElement.innerHTML = "<div class='payment-meta'>履歴がありません</div>";
-                    return;
+            const formatBody = (result) => {
+                if (!result) {
+                    return "No response";
                 }
-                payments.forEach((payment) => {
-                    const container = document.createElement("div");
-                    container.className = "payment-item";
-                    container.innerHTML = `
-                        <div><strong>${payment.description}</strong></div>
-                        <div>${formatAmount(payment.amountCents)} ${payment.currency}</div>
-                        <div class="payment-meta">${payment.createdAtIso}</div>
-                        <div class="badge">${payment.status}</div>
-                    `;
-                    paymentsElement.appendChild(container);
-                });
+                return JSON.stringify(result, null, 2);
             };
 
-            const getAmountCents = () => {
-                const amountNumber = Number(amountInput.value || "0");
-                return Math.round(amountNumber * 100);
+            const renderResult = (element, result) => {
+                element.textContent = formatBody(result);
             };
 
-            const buildRequestText = () => {
-                const amount = getAmountCents();
-                const currency = currencyInput.value.trim().toUpperCase();
-                const description = descriptionInput.value.trim();
-                const customerId = customerIdInput.value.trim();
-                const base = `x402で支払いを実行してください。\n金額: ${amount} (cents)\n通貨: ${currency}\n説明: ${description}`;
-                return customerId ? `${base}\n顧客ID: ${customerId}` : base;
+            const fetchHealth = async () => {
+                const result = await app.callServerTool({ name: "x402_get_health", arguments: {} });
+                renderResult(healthContent, result?.structuredContent);
             };
 
-            const syncRequestText = () => {
-                requestText.value = buildRequestText();
+            const fetchWeather = async () => {
+                const result = await app.callServerTool({ name: "x402_get_weather", arguments: {} });
+                renderResult(weatherContent, result?.structuredContent);
             };
 
-            const refreshPayments = async () => {
-                const result = await app.callServerTool({ name: "x402_list_payments", arguments: {} });
-                const payments = Array.isArray(result?.structuredContent?.payments)
-                    ? result.structuredContent.payments
-                    : [];
-                renderPayments(payments);
-            };
-
-            const handleAutoPay = async () => {
-                setStatus("支払い処理中...", "info");
-                autoPayButton.disabled = true;
-                sendToChatButton.disabled = true;
-                try {
-                    const result = await app.callServerTool({
-                        name: "x402_auto_pay",
-                        arguments: {
-                            amountCents: getAmountCents(),
-                            currency: currencyInput.value,
-                            description: descriptionInput.value,
-                            customerId: customerIdInput.value || undefined,
-                        },
-                    });
-                    const payment = result?.structuredContent?.payment;
-                    if (payment) {
-                        setStatus(`支払い完了: ${payment.status}`, "info");
-                        await app.updateModelContext({
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `x402 auto pay completed: ${payment.id} (${payment.status})`,
-                                },
-                            ],
-                        });
-                    } else {
-                        setStatus("支払い結果の取得に失敗しました", "error");
-                    }
-                    await refreshPayments();
-                } catch (_error) {
-                    setStatus("支払いに失敗しました", "error");
-                } finally {
-                    autoPayButton.disabled = false;
-                    sendToChatButton.disabled = false;
-                }
-            };
-
-            refreshButton.addEventListener("click", () => {
-                void refreshPayments();
-            });
-
-            autoPayButton.addEventListener("click", () => {
-                void handleAutoPay();
-            });
-
-            sendToChatButton.addEventListener("click", async () => {
-                setStatus("AIへ依頼文を送信しました", "info");
-                sendToChatButton.disabled = true;
-                try {
-                    await app.sendMessage({
-                        role: "user",
-                        content: [{ type: "text", text: requestText.value }],
-                    });
-                } finally {
-                    sendToChatButton.disabled = false;
-                }
-            });
-
-            [amountInput, currencyInput, descriptionInput, customerIdInput].forEach((input) => {
-                input.addEventListener("input", () => {
-                    syncRequestText();
-                });
+            refreshHealthButton.addEventListener("click", () => void fetchHealth());
+            refreshWeatherButton.addEventListener("click", () => void fetchWeather());
+            refreshAllButton.addEventListener("click", async () => {
+                await fetchHealth();
+                await fetchWeather();
             });
 
             app.ontoolinput = (params) => {
@@ -319,8 +144,8 @@
             };
 
             await app.connect();
-            syncRequestText();
-            await refreshPayments();
+            await fetchHealth();
+            await fetchWeather();
         </script>
     </body>
 </html>

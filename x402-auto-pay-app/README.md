@@ -73,6 +73,9 @@ ChatGPTの開発者画面で以下を設定します。
 
 pkgs/mcp-server/.env.example をコピーして .env を作成します。
 
+- X402_SERVER_BASE_URL: x402-server のURL
+- X402_SERVER_TIMEOUT_MS: タイムアウト(ms)
+
 ## コード品質
 
 ```bash
